@@ -7,6 +7,11 @@ ProteinConfig::ProteinConfig(std::string proteinConfigFile) {
     YAML::Node node = YAML::LoadFile(proteinConfigFile);
 
     readConfig(node, VARNAME(KBT), KBT, "");
+    readConfig(node, VARNAME(defaultTubulinUnbindingRate), defaultTubulinUnbindingRate, "");
+    readConfig(node, VARNAME(proteinEnhancedTubulinUnbindingRate), proteinEnhancedTubulinUnbindingRate, "");
+    readConfig(node, VARNAME(proteinEnhancementCutoffDistance), proteinEnhancementCutoffDistance, "");
+    readConfig(node, VARNAME(tubulinBindingRate), tubulinBindingRate, "");
+    readConfig(node, VARNAME(tubulinBindingCutoffRadius), tubulinBindingCutoffRadius, "");
 
     const int nTypes = node["proteins"].size();
     types.resize(nTypes);

@@ -1,0 +1,33 @@
+KBT: 0.00411 # pN.um, at 300K
+defaultTubulinUnbindingRate: 0          # The default unbinding rate for tubulin.
+proteinEnhancedTubulinUnbindingRate: 1000.0  # The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+proteinEnhancementCutoffDistance: 0.0125 # The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+tubulinBindingRate: 0.0         # The rate (binds per unit time) at which tubulin binds to the end of a microtubule.
+tubulinBindingCutoffRadius: 0.1 # The radius around the end of the microtubule at which tubulin can bind.
+proteins:
+  - tag: 0 # Type 0
+    walkOff: false # End pausing
+    fixedEnd0: true
+    freeNumber: 0
+    fixedLocationPerMT: [0] # given in [-1,1]. otherwise random
+    lookupType: 0
+    Ka: [0, 0] # (uM/L)^{-1}, used in U<->S
+    ko_s: [0, 0] # 1/s, off-rate
+    Ke: [0, 0] # dimensionless, used in S<->D
+    ko_d: [0, 0] # 1/s, off-rate
+    #
+    # Properties that do not matter for this test but are required to be set.
+    diffUnbound: 1.0 # um^2/s
+    vmax: [0.0, 0.0] # um/s
+    diffBoundS: [0, 0] # um^2/s
+    diffBoundD: [0, 0] # um^2/s
+    useBindVol: false
+    eps: 400 # um^{-1}
+    PtoAPratio: 1.
+    #
+    # Properties that do not matter for our single-head proteins but are required to be set.
+    freeLength: 0.053 # um
+    rc: 0.039 # um, (D/2 + \ell_0)/2
+    kappa: 300.0 # pN/um
+    fstall: 5.0 # pN
+    lambda: 0.25822 # dimensionless

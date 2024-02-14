@@ -47,8 +47,8 @@ struct ProteinBindStatus {
 
     // time varying properties
     bool changeBind[2] = {true, true}; ///< flag for if binding status changes
-    int idBind[2] = {ID_UB, ID_UB};    ///< global ID of bind MT
-    int indexBind[2] = {ID_UB, ID_UB}; ///< globalIndex of bind MT
+    int gidBind[2] = {ID_UB, ID_UB};    ///< global ID of bind MT (unique in all ranks)
+    int indexBind[2] = {ID_UB, ID_UB}; ///< globalIndex of bind MT (?)
     int rankBind[2] = {ID_UB, ID_UB};  ///< mpi rank of bind MT
     double lenBind[2] = {NAND, NAND};  ///< length of bind MT
     Link links[2];                     ///< Linked list to flexible filament
@@ -85,7 +85,7 @@ struct ProteinBindStatus {
      * @param end 0 or 1
      */
     void setUnBind(int end) {
-        idBind[end] = ID_UB;
+        gidBind[end] = ID_UB;
         indexBind[end] = ID_UB;
         rankBind[end] = ID_UB;
         lenBind[end] = NAND;
@@ -125,11 +125,13 @@ struct ProteinBindStatus {
                  const double directionLine[3], const double centerLine[3],
                  const double centerDist, const double length, const int rank) {
         assert(end == 0 || end == 1); // Make sure you choose a viable head
-        assert(idBind[end] == ID_UB); // Make sure end is originally unbound
+        assert(indexBind[end] == ID_UB); // Make sure end is originally unbound
+        assert(gidBind[end] == ID_UB); // Make sure end is originally unbound
+        assert(index != ID_UB);
         assert(gid != ID_UB);
         /* TODO: Set links <05-03-21, ARL> */
 
-        idBind[end] = gid;
+        gidBind[end] = gid;
         indexBind[end] = index;
         distBind[end] = centerDist;
         lenBind[end] = length;
@@ -145,7 +147,7 @@ struct ProteinBindStatus {
      * @param end
      */
     void updatePosEndBind(const int end) {
-        if (idBind[end] == ID_UB) {
+        if (gidBind[end] == ID_UB) {
             // End has just come unbound
             setUnBind(end);
         } else if (lenBind[end] == 0) {
@@ -167,11 +169,11 @@ struct ProteinBindStatus {
      * This must be called when posEndBind is valid
      */
     void updatePosWithEndBind() {
-        if (idBind[0] != ID_UB && idBind[1] == ID_UB) { // Case 2
+        if (gidBind[0] != ID_UB && gidBind[1] == ID_UB) { // Case 2
             std::copy(posEndBind[0], posEndBind[0] + 3, pos);
-        } else if (idBind[0] == ID_UB && idBind[1] != ID_UB) { // Case 2
+        } else if (gidBind[0] == ID_UB && gidBind[1] != ID_UB) { // Case 2
             std::copy(posEndBind[1], posEndBind[1] + 3, pos);
-        } else if (idBind[0] != ID_UB && idBind[1] != ID_UB) { // Case 1
+        } else if (gidBind[0] != ID_UB && gidBind[1] != ID_UB) { // Case 1
             for (int i = 0; i < 3; i++) {
                 pos[i] = 0.5 * (posEndBind[0][i] + posEndBind[1][i]);
             }
@@ -184,7 +186,7 @@ struct ProteinBindStatus {
      * @param end
      */
     void updatePosEndClamp(int end) {
-        if (idBind[end] != ID_UB) {
+        if (gidBind[end] != ID_UB) {
             const double lenHalf = lenBind[end] * 0.5;
             if (distBind[end] > lenHalf)
                 distBind[end] = lenHalf;

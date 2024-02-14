@@ -173,7 +173,7 @@ void KMC_S(const ProteinData &pData, const std::vector<const Tubule *> &ep_j,
 #ifndef NDEBUG
         printf("S->U Unbinding\n");
 #endif
-        assert(pBind.idBind[0] == ID_UB && pBind.idBind[1] == ID_UB);
+        assert(pBind.gidBind[0] == ID_UB && pBind.gidBind[1] == ID_UB);
     } else if (activated_end == (1 - bound_end)) { // Bind unbound head
         double bindPos; // Position on rod where protein will bind,
                         // passed by reference.
@@ -192,7 +192,7 @@ void KMC_S(const ProteinData &pData, const std::vector<const Tubule *> &ep_j,
         // Bind protein to object
         pBind.setBind(activated_end, obj.gid, obj.globalIndex, obj.direction,
                       rPos, bindPos, obj.length, obj.rank);
-        assert(pBind.idBind[0] != ID_UB && pBind.idBind[1] != ID_UB);
+        assert(pBind.gidBind[0] != ID_UB && pBind.gidBind[1] != ID_UB);
     }
     return;
 }

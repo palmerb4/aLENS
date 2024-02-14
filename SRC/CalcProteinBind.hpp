@@ -80,7 +80,7 @@ class CalcProteinBind {
             bool bindFound[2] = {false, false};
             for (const auto &ptr : srcPtrArr) {
                 for (int end = 0; end < 2; end++) {
-                    if (bindStatus.idBind[end] == ptr->gid) {
+                    if (bindStatus.gidBind[end] == ptr->gid) {
                         std::copy(ptr->pos, ptr->pos + 3,
                                   bindStatus.centerBind[end]);
                         std::copy(ptr->direction, ptr->direction + 3,
@@ -95,21 +95,21 @@ class CalcProteinBind {
             }
             if (bindFound[0] == false && pData.property.fixedEnd0 == false) {
 #ifndef NDEBUG
-                if (bindStatus.idBind[0] != ID_UB)
+                if (bindStatus.gidBind[0] != ID_UB)
                     spdlog::error(
                         "Unbinding end 0 of protein {} because sylinder {} "
                         "could not be found.",
-                        pData.gid, bindStatus.idBind[0]);
+                        pData.gid, bindStatus.gidBind[0]);
 #endif
                 bindStatus.setUnBind(0);
             }
             if (bindFound[1] == false) {
 #ifndef NDEBUG
-                if (bindStatus.idBind[1] != ID_UB)
+                if (bindStatus.gidBind[1] != ID_UB)
                     spdlog::error(
                         "Unbinding end 1 of protein {} because sylinder {} "
                         "could not be found.",
-                        pData.gid, bindStatus.idBind[1]);
+                        pData.gid, bindStatus.gidBind[1]);
 #endif
                 bindStatus.setUnBind(1);
             }
@@ -125,8 +125,8 @@ class CalcProteinBind {
             // NOT trg.epTrg
             int stage = -1;
             // trg.epTrg is a ProteinData object
-            bool end1isUB = (bindStatus.idBind[0] == ID_UB);
-            bool end2isUB = (bindStatus.idBind[1] == ID_UB);
+            bool end1isUB = (bindStatus.gidBind[0] == ID_UB);
+            bool end2isUB = (bindStatus.gidBind[1] == ID_UB);
             if (end1isUB && end2isUB)
                 stage = 0;
             else if (end1isUB || end2isUB)

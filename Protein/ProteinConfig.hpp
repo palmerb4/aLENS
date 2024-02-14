@@ -31,6 +31,14 @@
 class ProteinConfig {
   public:
     double KBT;
+    double defaultTubulinUnbindingRate;          ///< The default unbinding rate for tubulin.
+    double proteinEnhancedTubulinUnbindingRate;  ///< The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+    double proteinEnhancementCutoffDistance;     ///< The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+    double tubulinBindingRate;         ///< The rate at which tubulin binds to the end of a microtubule.
+    double tubulinBindingCutoffRadius; ///< The radius around the end of the microtubule at which tubulin can bind.
+
+
+
     std::vector<ProteinType> types; ///< settings for different types
 
     std::vector<int> freeNumber; ///< free number for each type

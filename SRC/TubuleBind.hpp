@@ -22,6 +22,7 @@
  */
 struct TubuleBindEP {
   public:
+    int lid;         ///< global unique id
     int gid;         ///< global unique id
     int globalIndex; ///< sequentially ordered unique index in sylinder map
     int rank;        ///< mpi rank of owning rank

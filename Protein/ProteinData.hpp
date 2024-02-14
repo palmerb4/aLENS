@@ -161,7 +161,7 @@ struct ProteinData {
      * \param end Which protein end
      * \return ID of rod protein is bound to
      */
-    int getBindID(int end) const { return bind.idBind[end]; }
+    int getBindID(int end) const { return bind.gidBind[end]; }
 
     /**
      * @brief Get the ProteinForceLength, subtracting tubule diameter
@@ -170,7 +170,7 @@ struct ProteinData {
      */
     double getProteinForceLength() const {
         double length = 0;
-        if (bind.idBind[0] == ID_UB || bind.idBind[1] == ID_UB) {
+        if (bind.gidBind[0] == ID_UB || bind.gidBind[1] == ID_UB) {
             length = 0;
         } else {
             // consistent tubuleDiameter as the original LUT construction
@@ -200,7 +200,7 @@ struct ProteinData {
      * @return double the calculated length
      */
     double getProteinEndEndLength() const {
-        if (bind.idBind[0] == ID_UB || bind.idBind[1] == ID_UB) {
+        if (bind.gidBind[0] == ID_UB || bind.gidBind[1] == ID_UB) {
             return 0;
         } else {
             Evec3 r = ECmap3(bind.posEndBind[0]) - ECmap3(bind.posEndBind[1]);
@@ -236,7 +236,7 @@ struct ProteinData {
      * @return false
      */
     bool getWalkOrNot() const {
-        return (bind.idBind[0] != ID_UB || bind.idBind[1] != ID_UB);
+        return (bind.gidBind[0] != ID_UB || bind.gidBind[1] != ID_UB);
     }
 
     /**********************************
@@ -259,7 +259,7 @@ struct ProteinData {
 
         // move bind center if bind
         for (int e = 0; e < 2; e++) {
-            if (bind.idBind[e] != ID_UB) {
+            if (bind.gidBind[e] != ID_UB) {
                 Emap3(bind.centerBind[e]) += jump;
             }
         }
@@ -271,17 +271,17 @@ struct ProteinData {
      * @brief Set protein status from file information
      * 
      * WARNING: after this function, the status of this protein is incomplete. 
-     * the bind info must be updated with idBind before simulation steps
+     * the bind info must be updated with gidBind before simulation steps
      * 
      * @param gid_ 
      * @param tag_ 
      * @param end0 
      * @param end1 
-     * @param idBind
+     * @param gidBind
      * @param property_ 
      */
     void setFromFileInput(const int gid_, const int tag_, const double end0[3],
-                          const double end1[3], const int idBind[2],
+                          const double end1[3], const int indexBind[2], const int gidBind[2],
                           const ProteinType &property_) {
         bind.clear();
         gid = gid_;
@@ -291,8 +291,10 @@ struct ProteinData {
             bind.posEndBind[1][k] = end1[k];
             bind.pos[k] = 0.5 * (end0[k] + end1[k]);
         }
-        bind.idBind[0] = idBind[0];
-        bind.idBind[1] = idBind[1];
+        bind.indexBind[0] = indexBind[0];
+        bind.indexBind[1] = indexBind[1];
+        bind.gidBind[0] = gidBind[0];
+        bind.gidBind[1] = gidBind[1];
         property = property_;
         if (property.tag != tag_) {
             printf("protein tag error. dat/yaml file mismatch\n");
@@ -318,18 +320,18 @@ struct ProteinData {
     void updatePosWalk(double KBT, double dt, double U01, double N01a,
                        double N01b) {
         assert(getWalkOrNot());
-        if (bind.idBind[0] != ID_UB && bind.idBind[1] != ID_UB) {
+        if (bind.gidBind[0] != ID_UB && bind.gidBind[1] != ID_UB) {
             double v0 = calcEndWalkVelocity(0) + calcEndDragVelocity(0, KBT);
             double v1 = calcEndWalkVelocity(1) + calcEndDragVelocity(1, KBT);
             const double diff0 = sqrt(dt * property.diffBoundD[0] * 2);
             const double diff1 = sqrt(dt * property.diffBoundD[1] * 2);
             bind.distBind[0] += v0 * dt + diff0 * N01a;
             bind.distBind[1] += v1 * dt + diff1 * N01b;
-        } else if (bind.idBind[0] != ID_UB && bind.idBind[1] == ID_UB) {
+        } else if (bind.gidBind[0] != ID_UB && bind.gidBind[1] == ID_UB) {
             double v0 = property.vmax[0];
             const double diff0 = sqrt(dt * property.diffBoundS[0] * 2);
             bind.distBind[0] += v0 * dt + diff0 * N01a;
-        } else if (bind.idBind[0] == ID_UB && bind.idBind[1] != ID_UB) {
+        } else if (bind.gidBind[0] == ID_UB && bind.gidBind[1] != ID_UB) {
             double v1 = property.vmax[1];
             const double diff1 = sqrt(dt * property.diffBoundS[1] * 2);
             bind.distBind[1] += v1 * dt + diff1 * N01b;
@@ -416,7 +418,7 @@ struct ProteinData {
      * @return double
      */
     void updateForceTorqueBind() {
-        if (bind.idBind[0] != ID_UB && bind.idBind[1] != ID_UB) {
+        if (bind.gidBind[0] != ID_UB && bind.gidBind[1] != ID_UB) {
             Evec3 r = Emap3(bind.posEndBind[0]) - Emap3(bind.posEndBind[1]);
             double force = (getProteinForceLength() - property.freeLength) *
                            property.kappa;
@@ -457,7 +459,7 @@ struct ProteinData {
      * @return double computed walking velocity
      */
     double calcEndWalkVelocity(int end) const {
-        assert(bind.idBind[end] != ID_UB);
+        assert(bind.gidBind[end] != ID_UB);
         // sgn_fac = +1 for moving towards plus end, -1 for moving towards minus end
         double sgn_fac = sgn(property.vmax[end]);
         double fproj =
@@ -465,7 +467,7 @@ struct ProteinData {
             ECmap3(forceBind[end]).dot(ECmap3(bind.directionBind[end])) /
             std::abs(property.fstall);
         double vfrac = std::max(0.0, std::min(1.0, 1.0 + fproj));
-        if (bind.idBind[1 - end] == ID_UB) { // only this end is bound
+        if (bind.gidBind[1 - end] == ID_UB) { // only this end is bound
             return property.vmax[end] * vfrac;
         } else {
             double vel =
@@ -487,7 +489,7 @@ struct ProteinData {
      * @return double computed drag velocity from force
      */
     double calcEndDragVelocity(int end, double KBT) const {
-        assert(bind.idBind[end] != ID_UB);
+        assert(bind.gidBind[end] != ID_UB);
         if (property.vdrag[end]) {
             double fproj =
                 ECmap3(forceBind[end]).dot(ECmap3(bind.directionBind[end]));
@@ -543,7 +545,7 @@ struct ProteinData {
      * @param fptr
      */
     void writeAscii(FILE *fptr) const {
-        if (bind.idBind[0] != ID_UB && bind.idBind[1] != ID_UB) {
+        if (bind.gidBind[0] != ID_UB && bind.gidBind[1] != ID_UB) {
             // protein has finite length
             // this should NOT out put nan
             fprintf(fptr, "P %d %d %.6g %.6g %.6g %.6g %.6g %.6g %d %d\n", //
@@ -552,14 +554,14 @@ struct ProteinData {
                     bind.posEndBind[0][2], //
                     bind.posEndBind[1][0], bind.posEndBind[1][1],
                     bind.posEndBind[1][2], //
-                    bind.idBind[0], bind.idBind[1]);
+                    bind.gidBind[0], bind.gidBind[1]);
         } else {
             // protein has zero length
             fprintf(fptr, "P %d %d %.6g %.6g %.6g %.6g %.6g %.6g %d %d\n", //
                     gid, property.tag,                                     //
                     bind.pos[0], bind.pos[1], bind.pos[2],                 //
                     bind.pos[0], bind.pos[1], bind.pos[2],                 //
-                    bind.idBind[0], bind.idBind[1]);
+                    bind.gidBind[0], bind.gidBind[1]);
         }
     }
 
@@ -598,13 +600,13 @@ struct ProteinData {
         // protein data
         std::vector<int32_t> gid(proteinNumber);
         std::vector<int32_t> tag(proteinNumber);
-        std::vector<int32_t> idBind(2 * proteinNumber);
+        std::vector<int32_t> gidBind(2 * proteinNumber);
 
 #pragma omp parallel for
         for (int i = 0; i < proteinNumber; i++) {
             const auto &p = protein[i];
             // point and point data
-            if (p.bind.idBind[0] != ID_UB && p.bind.idBind[1] != ID_UB) {
+            if (p.bind.gidBind[0] != ID_UB && p.bind.gidBind[1] != ID_UB) {
                 // if both bind, posEndBind is valid
                 pos[6 * i + 0] = p.bind.posEndBind[0][0];
                 pos[6 * i + 1] = p.bind.posEndBind[0][1];
@@ -630,8 +632,8 @@ struct ProteinData {
 
             // protein data
             // point data
-            idBind[2 * i] = p.bind.idBind[0];
-            idBind[2 * i + 1] = p.bind.idBind[1];
+            gidBind[2 * i] = p.bind.gidBind[0];
+            gidBind[2 * i + 1] = p.bind.gidBind[1];
             // cell data
             gid[i] = p.gid;
             tag[i] = p.property.tag;
@@ -657,7 +659,7 @@ struct ProteinData {
         file << "</Lines>\n";
         // point data
         file << "<PointData Scalars=\"scalars\">\n";
-        IOHelper::writeDataArrayBase64(idBind, "idBind", 1, file);
+        IOHelper::writeDataArrayBase64(gidBind, "gidBind", 1, file);
         file << "</PointData>\n";
         // cell data
         file << "<CellData Scalars=\"scalars\">\n";
@@ -682,7 +684,7 @@ struct ProteinData {
         std::vector<std::string> pieceNames;
 
         std::vector<IOHelper::FieldVTU> pointDataFields;
-        pointDataFields.emplace_back(1, IOHelper::IOTYPE::Int32, "idBind");
+        pointDataFields.emplace_back(1, IOHelper::IOTYPE::Int32, "gidBind");
 
         std::vector<IOHelper::FieldVTU> cellDataFields;
         cellDataFields.emplace_back(1, IOHelper::IOTYPE::Int32, "gid");

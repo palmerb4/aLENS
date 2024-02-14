@@ -1,0 +1,6 @@
+KBT: 0.00411 # pN.um, at 300K
+defaultTubulinUnbindingRate: 1000.0           # The default unbinding rate for tubulin.
+proteinEnhancedTubulinUnbindingRate: 0  # The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+proteinEnhancementCutoffDistance: 0.0125 # The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+tubulinBindingRate: 0.0         # The rate (binds per unit time) at which tubulin binds to the end of a microtubule.
+tubulinBindingCutoffRadius: 0.5 # The radius around the end of the microtubule at which tubulin can bind.

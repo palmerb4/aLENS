@@ -35,7 +35,6 @@
  *
  */
 class TubuleSystem {
-
   public:
     const ProteinConfig proteinConfig; ///< the ProteinConfig file
 
@@ -92,7 +91,6 @@ class TubuleSystem {
      */
     bool end();
 
-  private:
     int rank;                             ///< mpi rank
     int nProcs;                           ///< mpi size
     std::shared_ptr<TRngPool> rngPoolPtr; ///< point to rodSystem.rngPoolPtr
@@ -128,6 +126,12 @@ class TubuleSystem {
      *
      */
     void calcBindInteraction();
+
+      /**
+     * @brief Bind tubulin to existing microtubules
+     *
+     */
+    void calcTubulinBindInteraction();
 
     /**
      * @brief calculate protein diffusion or walking

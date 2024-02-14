@@ -111,7 +111,7 @@ Here is a list of `ProteinBindStatus` data fields.
 | ---------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `double pos[3]` | `{NAND,NAND,NAND}` | The (lab frame) center position of this protein. Always valid |
 | `bool changeBind[2]` | `{true, true}` | If `false`, update binding information only and bypass the KMC step. |
-| `int idBind[2]` | `{ID_UB, ID_UB}` | The gid of each bound MT. Set to `ID_UB` if unbound |
+| `int gidBind[2]` | `{ID_UB, ID_UB}` | The gid of each bound MT. Set to `ID_UB` if unbound |
 | `int rankBind[2]` | `{ID_UB, ID_UB}` | The MPI rank of each bound MT. $\in[0,nProcs-1]$, otherwise set to `ID_UB`. |
 | `double lenBind[2]` | `{NAND, NAND}` | The length of each bound MT. |
 | `double distBind[2]` | `{NAND, NAND}` | The distance to the center of each bound MT. $\in [-lenBind/2,lenBind/2]$, positive is towards the plus end. |
@@ -471,7 +471,7 @@ All proteins from all mpi ranks are combined into a single file.
 Each protein takes a line, and is exported as
 
 ```c
-        if (bind.idBind[0] != ID_UB && bind.idBind[1] != ID_UB) {
+        if (bind.gidBind[0] != ID_UB && bind.gidBind[1] != ID_UB) {
             // protein has finite length
             // this should NOT out put nan
             fprintf(fptr, "P %d %d %.6g %.6g %.6g %.6g %.6g %.6g %d %d\n", //
@@ -480,14 +480,14 @@ Each protein takes a line, and is exported as
                     bind.posEndBind[0][2], //
                     bind.posEndBind[1][0], bind.posEndBind[1][1],
                     bind.posEndBind[1][2], //
-                    bind.idBind[0], bind.idBind[1]);
+                    bind.gidBind[0], bind.gidBind[1]);
         } else {
             // protein has zero length
             fprintf(fptr, "P %d %d %.6g %.6g %.6g %.6g %.6g %.6g %d %d\n", //
                     gid, property.tag,                                     //
                     bind.pos[0], bind.pos[1], bind.pos[2],                 //
                     bind.pos[0], bind.pos[1], bind.pos[2],                 //
-                    bind.idBind[0], bind.idBind[1]);
+                    bind.gidBind[0], bind.gidBind[1]);
         }
 ```
 

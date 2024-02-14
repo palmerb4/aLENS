@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.10) # same requirement as trilinos
+cmake_minimum_required(VERSION 3.17) # same requirement as trilinos
 project(aLENS)
 
 # global settings
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
@@ -161,6 +161,7 @@ install(TARGETS aLENS.X DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 if(ENABLE_TEST)
   enable_testing()
+  add_subdirectory(SRC)
   add_subdirectory(Protein)
   add_subdirectory(KMC EXCLUDE_FROM_ALL)
 endif()
