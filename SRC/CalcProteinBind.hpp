@@ -39,8 +39,7 @@ class CalcProteinBind {
      * @param KBT_ 
      * @param rngPoolPtr_
      */
-    CalcProteinBind(double dt_, double KBT_,
-                    std::shared_ptr<TRngPool> &rngPoolPtr_) {
+    CalcProteinBind(double dt_, double KBT_, std::shared_ptr<TRngPool> &rngPoolPtr_) {
         dt = dt_;
         KBT = KBT_;
         rngPoolPtr = rngPoolPtr_;
@@ -56,16 +55,16 @@ class CalcProteinBind {
      * @param mixForcePtr
      */
     template <class Tubule>
-    void operator()(const MixEPI<ProteinData> *const trgPtr, const PS::S32 nTrg,
-                    const MixEPJ<Tubule> *const srcPtr, const PS::S32 nSrc,
-                    ProteinBindStatus *const mixForcePtr) {
+    void operator()(const MixEPI<ProteinData> *const trgPtr, const PS::S32 nTrg, const MixEPJ<Tubule> *const srcPtr,
+                    const PS::S32 nSrc, ProteinBindStatus *const mixForcePtr) {
         const int threadID = omp_get_thread_num();
 
         // Build Sylinder pointer vector used for all protein bindings
         std::vector<const Tubule *> srcPtrArr;
         for (int s = 0; s < nSrc; s++) {
-            if (srcPtr[s].srcFlag)
+            if (srcPtr[s].srcFlag && srcPtr[s].epSrc.isSphere() == false) {
                 srcPtrArr.push_back(&(srcPtr[s].epSrc));
+            }
         }
 
         for (int t = 0; t < nTrg; t++) {
@@ -81,10 +80,8 @@ class CalcProteinBind {
             for (const auto &ptr : srcPtrArr) {
                 for (int end = 0; end < 2; end++) {
                     if (bindStatus.gidBind[end] == ptr->gid) {
-                        std::copy(ptr->pos, ptr->pos + 3,
-                                  bindStatus.centerBind[end]);
-                        std::copy(ptr->direction, ptr->direction + 3,
-                                  bindStatus.directionBind[end]);
+                        std::copy(ptr->pos, ptr->pos + 3, bindStatus.centerBind[end]);
+                        std::copy(ptr->direction, ptr->direction + 3, bindStatus.directionBind[end]);
                         bindStatus.lenBind[end] = ptr->length;
                         bindStatus.rankBind[end] = ptr->rank;
                         bindStatus.indexBind[end] = ptr->globalIndex;
@@ -96,20 +93,18 @@ class CalcProteinBind {
             if (bindFound[0] == false && pData.property.fixedEnd0 == false) {
 #ifndef NDEBUG
                 if (bindStatus.gidBind[0] != ID_UB)
-                    spdlog::error(
-                        "Unbinding end 0 of protein {} because sylinder {} "
-                        "could not be found.",
-                        pData.gid, bindStatus.gidBind[0]);
+                    spdlog::error("Unbinding end 0 of protein {} because sylinder {} "
+                                  "could not be found.",
+                                  pData.gid, bindStatus.gidBind[0]);
 #endif
                 bindStatus.setUnBind(0);
             }
             if (bindFound[1] == false) {
 #ifndef NDEBUG
                 if (bindStatus.gidBind[1] != ID_UB)
-                    spdlog::error(
-                        "Unbinding end 1 of protein {} because sylinder {} "
-                        "could not be found.",
-                        pData.gid, bindStatus.gidBind[1]);
+                    spdlog::error("Unbinding end 1 of protein {} because sylinder {} "
+                                  "could not be found.",
+                                  pData.gid, bindStatus.gidBind[1]);
 #endif
                 bindStatus.setUnBind(1);
             }
@@ -164,8 +159,7 @@ class CalcProteinBind {
                 KMC_D(pData, srcPtrArr, dt, KBT, roll[0], bindStatusResult);
                 break;
             default:
-                spdlog::critical(
-                    " Could not execute correct stage in CalcProteinBind.");
+                spdlog::critical(" Could not execute correct stage in CalcProteinBind.");
                 exit(1);
             }
         }
