@@ -1,0 +1,4 @@
+# 1 microtubule and 2 tubulin (both within the tubulin binding cutoff radius)
+# Type GID LeftCoordX LeftCoordY LeftCoordZ RightCoordX RightCoordY RightCoordZ GroupID
+C 1 0.0125 0.0 0.0 0.0 1.0 0.0 0.0 0 
+

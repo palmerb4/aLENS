@@ -1,0 +1,10 @@
+KBT: 0.00411 # pN.um, at 300K
+tubulinBindInteractionType: "implicit" # The type of tubulin binding interaction to use. Options are 'explicit' and 'implicit'.
+defaultTubulinUnbindingRate: 1000.0           # The default unbinding rate for tubulin.
+proteinEnhancedTubulinUnbindingRate: 0  # The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+proteinEnhancementCutoffDistance: 0.0125 # The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+tubulinBindingRate: 0.0         # The rate at which tubulin binds to the end of a microtubule.
+tubulinLength: 0.2             # The length of a tubulin. We set it to be the same as the rod diameter, but it can be whatever you want.
+tubulinLoadBalanceFrequency: 50 # The frequency (in number of timesteps between load balance calls) at which the 
+                                # local number of tubulin is load balanced synchronized with the global count and redistributed.
+initialFreeTubulinCount: 0 # The initial number of free tubulin in the global pool.

@@ -81,6 +81,13 @@ TubuleSystem::TubuleSystem(const std::string &configFileSystem, const std::strin
     // step 2 initialize shared resource
     rngPoolPtr = rodSystem.getRngPoolPtr();
 
+    // step 2.5 Initialize the global tubulin pool
+    // The global tubulin pool is used to keep track of the number of unbound tubulin.
+    // GlobalTubulinPool(const int &initial_global_microtubule_count, const int &initial_global_tubulin_count,
+    //                   const int &num_procs, const int rank, std::shared_ptr<TRngPool> &rng_pool_ptr)
+    globalTubulinPoolPtr = std::make_shared<GlobalTubulinPool>(rodSystem.getContainer().getNumberOfParticleGlobal(),
+                                          proteinConfig.initialFreeTubulinCount, nProcs, rank, rngPoolPtr.get());
+
     // step 3 initialize proteins and distribute
     buildLookupTable();
     proteinContainer.initialize();
@@ -260,53 +267,65 @@ void TubuleSystem::calcBindInteraction() {
 }
 
 void TubuleSystem::calcTubulinBindInteraction() {
-    // TUBULIN MUST BE LENGTH ZERO (aka, spheres)
-    // MICROTUBULES MUST BE IN GROUP 0 AND TUBULIN IN GROUP 1
-    // PROTEINS SHOULD HAVE TAG 0
-
-#ifndef NDEBUG
-    // Test our assumptions:
-
-    {
-        // We assume that tubulin are length zero (aka, spheres).
-        // We assume that the tubulinBindingCutoffRadius is larger than the radius of a tubulin.
-        const int nRodLocal = rodSystem.getContainer().getNumberOfParticleLocal();
-        for (int i = 0; i < nRodLocal; i++) {
-            const auto &sy = rodSystem.getContainer()[i];
-            const bool isTubulin = (sy.group == 1);
-            if (isTubulin) {
-                assert(sy.length < 1e-12 && "Tubulin must be length zero (aka, spheres).");
-                assert(sy.radius < proteinConfig.tubulinBindingCutoffRadius &&
-                       "The tubulin binding cutoff radius must be larger than the radius of a tubulin.");
-            }
-        }
-
-
+    if (proteinConfig.tubulinBindInteractionType == "explicit") {
+        calcTubulinBindInteractionExplicit();
+    } else if (proteinConfig.tubulinBindInteractionType == "implicit") {
+        calcTubulinBindInteractionImplicit();
+    } else {
+        throw std::runtime_error(
+            "Unknown tubulin bind interaction type. Valiud options are 'explicit' and 'implicit'.");
     }
-#endif
+}
+
+void TubuleSystem::calcTubulinBindInteractionImplicit() {
+    /* Methodology: 
+    Instead of representing tubulin as individual particles, we represent them as a finite sized pool of tubulin. 
+    Each tubulin within this pool has an equal probability of binding to each microtubule. We rely on the GlobalTubulinPool class 
+    to keep track of the number of unbound tubulin and to count of number of tubulin that bind to each microtubule.
+
+    What are out control parameters?
+     - tubulinBindInteractionType: The type of tubulin binding interaction to use. Options are 'explicit' and 'implicit'. 
+     - defaultTubulinUnbindingRate: The default unbinding rate for tubulin.
+     - proteinEnhancedTubulinUnbindingRate: The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+     - proteinEnhancementCutoffDistance: The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+     - tubulinBindingRate: The rate at which tubulin binds to the end of a microtubule.
+     - tubulinLength: The length of a tubulin.
+     - tubulinLoadBalanceFrequency: The frequency at which the local number of tubulin is load balanced synchronized with the global count and redistributed.
+     - initialFreeTubulinCount: The initial number of free tubulin in the global pool.
+     - dt: The time step size.
+    */
+
+    // Because the global count of tubulin is distributed among the processes where the local count is allowed to go out of sync with the global count,
+    // leading to the potential for load imbalance, we occasionally synchronize the global count of tubulin and redistribute it among the processes.
+    if (rodSystem.getStepCount() % proteinConfig.tubulinLoadBalanceFrequency == 0) {
+        globalTubulinPoolPtr->synchronize();
+        globalTubulinPoolPtr->distribute();
+    }
+
+    ////////////////////////////////////
+    // Setup tubulin bind interaction //
+    ////////////////////////////////////
+    // To ensure that binding and unbinding do not impact one another within the same timestep, we interleave the unbinding and binding steps.
+    {
+        // Count the number of tubulin that bind to each microtubule.
+        globalTubulinPoolPtr->count_tubulin_binding(proteinConfig.tubulinBindingRate, rodSystem.runConfig.dt);
+
+        // Incrementing the length of the microtubules based on this count is deferred until after the unbinding step to avoid introducing bias.
+    }
 
     ////////////////////////////////
     // Tubulin unbind interaction //
     ////////////////////////////////
-
-    // What are out control parameters?
-    //  - defaultTubulinUnbindingRate: The default unbinding rate for tubulin.
-    //  - proteinEnhancedTubulinUnbindingRate: The unbinding rate for tubulin when a protein is present at the end of the microtubule.
-    //  - proteinEnhancementCutoffDistance: The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
-    //  - tubulinBindingRate: The rate at which tubulin binds to the end of a microtubule.
-    //  - tubulinBindingCutoffRadius: The radius around the end of the microtubule at which tubulin can bind. This should be larger than the radius of a tubulin.
-    //  - dt: The time step size.
-
-    std::vector<Sylinder> newSylinders;
     {
         // A tubulin unbinds based on a Poisson process with a rate that depends on
         // the presence of a protein at the end of the microtubule.
 
         // Step 1: Calculate the unbinding rate for each microtubule based on the presence of a protein at the end.
 
-        // Loop over each protein, determine if it's close enough to the end of a microtubule to enhance the unbinding rate of tubulin or not. Store the rate per microtubule
-        // and the sequential global index of said microtubule. Perform an all-to-all communication to send the rates and global indices to everyone. Then, sort the rates by global index.
-        // After all of that, we can loop over the microtubules and fetch the rate using the global index.
+        // Loop over each protein, determine if it's close enough to the end of a microtubule to enhance the unbinding
+        // rate of tubulin or not. Store the rate per microtubule and the sequential global index of said microtubule.
+        // Perform an all-to-all communication to send the rates and global indices to everyone. Then, sort the rates by
+        // global index. After all of that, we can loop over the microtubules and fetch the rate using the global index.
         std::vector<int> globalIndicesToCommunicate;
         std::vector<int> hasEnhancedUnbindingFlagToCommunicate;
         std::vector<std::vector<int>> globalIndicesToCommunicatePool(omp_get_max_threads());
@@ -317,6 +336,7 @@ void TubuleSystem::calcTubulinBindInteraction() {
             const int threadId = omp_get_thread_num();
             globalIndicesToCommunicatePool[threadId].clear();
             hasEnhancedUnbindingFlagToCommunicatePool[threadId].clear();
+#pragma omp for
             for (int i = 0; i < nProteinLocal; i++) {
                 const auto &p = proteinContainer[i];
                 if ((p.property.tag == 0) && (p.bind.gidBind[0] != ID_UB) &&
@@ -369,7 +389,239 @@ void TubuleSystem::calcTubulinBindInteraction() {
                        allHasEnhancedUnbindingFlags.data(), allSizes.data(), displs.data(), MPI_INT, MPI_COMM_WORLD);
 
         // Now, we need to sort and unique the global indices and flag. If two global indices are the same, we take the max of the has enhanced unbinding flags.
-        // To perform this sorting, we will create a single vector with size number of global particles and initialized to false. The global index can be used to 
+        // To perform this sorting, we will create a single vector with size number of global particles and initialized to false. The global index can be used to
+        // index this vector. We will index into this vector and store the max of the unsorted flags. As a result, if there are multiple entries
+        // for the same rod, the rod should be marked with true if at least one instance of its flag is true.
+        int globalNumberOfRods = 0;
+        int localNumberOfRods = rodSystem.getContainer().getNumberOfParticleLocal();
+        MPI_Allreduce(&localNumberOfRods, &globalNumberOfRods, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+        std::vector<int> globalHasEnhancedUnbindingFlags(globalNumberOfRods, 0);
+
+#pragma omp parallel for
+        for (int i = 0; i < allHasEnhancedUnbindingFlags.size(); i++) {
+
+#pragma omp critical
+            globalHasEnhancedUnbindingFlags[allGlobalIndices[i]] =
+                std::max(globalHasEnhancedUnbindingFlags[allGlobalIndices[i]], allHasEnhancedUnbindingFlags[i]);
+        }
+
+        // Step 2: Perform unbinding based on the calculated rates.
+        const int nRodLocal = rodSystem.getContainer().getNumberOfParticleLocal();
+#pragma omp parallel
+        {
+            const int threadId = omp_get_thread_num();
+#pragma omp for
+            for (int i = 0; i < nRodLocal; i++) {
+                auto &sy = rodSystem.getContainerNonConst()[i];
+
+                // Check if the microtubule should unbind a tubulin based on a Poisson process with the calculated rate.
+                const double randU01 = rngPoolPtr->getU01(threadId);
+                const bool sufficientlyLong =
+                    sy.length >
+                    proteinConfig.tubulinLength + 1e-12; // NOTE, we only unbind tubulin if the microtubule has at least one tubulin-worth of length.
+
+                assert(sy.globalIndex != GEO_INVALID_INDEX &&
+                       "The global index of a microtubule is invalid. Tell the developers.");
+                const bool enhancedUnbindingFlag = globalHasEnhancedUnbindingFlags[sy.globalIndex];
+                const double tubulinUnbindingRate = enhancedUnbindingFlag
+                                                        ? proteinConfig.proteinEnhancedTubulinUnbindingRate
+                                                        : proteinConfig.defaultTubulinUnbindingRate;
+
+                if ((randU01 < tubulinUnbindingRate * rodSystem.runConfig.dt) && sufficientlyLong) {
+                    // Unbind a tubulin from the microtubule and add the tubulin to the global unbound pool. Note, this must be done in a thread-safe manner.
+#pragma omp critical
+                    globalTubulinPoolPtr->increment();
+
+                    // Reduce the length of the microtubule by the tubulin length.
+                    sy.length -= proteinConfig.tubulinLength;
+
+                    // Shift the position to account for the change in length.
+                    const Evec3 direction = ECmapq(sy.orientation) * Evec3(0, 0, 1);
+                    Emap3(sy.pos) -= direction * proteinConfig.tubulinLength / 2.0;
+                }
+            }
+        }
+
+        // Step 3. Perform the unbinding of end-bound proteins that are connected to microtubules that unbound a tubulin and now lie outside the microtubule's centerline.
+        // Note, the microtubules have changed length, so bind.lenBind is out of date. We must fetch the connected microtubule's
+        // length from the sylinder container. We can use the ZDD for this.
+
+        // This step requires that we create another global map from global index to sylinder length.
+        // The last step was complicated because we had to from an unknown number of proteins to the global indices of the microtubules they were connected to.
+        // On the other hand, this step is rather straightforward because we simply need to map from GID to length. We can use the ZDD for this.
+        const auto &rodContainer = rodSystem.getContainer();
+        ZDD<double> rodLengthDataDirectory(nRodLocal);
+        rodLengthDataDirectory.gidOnLocal.resize(nRodLocal);
+        rodLengthDataDirectory.dataOnLocal.resize(nRodLocal);
+#pragma omp parallel for
+        for (int t = 0; t < nRodLocal; t++) {
+            rodLengthDataDirectory.gidOnLocal[t] = rodContainer[t].gid;
+            rodLengthDataDirectory.dataOnLocal[t] = rodContainer[t].length;
+        }
+        rodLengthDataDirectory.buildIndex();
+
+        // step 2 put id to find. two ids per protein
+        rodLengthDataDirectory.gidToFind.resize(2 * nProteinLocal);
+        rodLengthDataDirectory.dataToFind.resize(2 * nProteinLocal);
+#pragma omp parallel for
+        for (int p = 0; p < nProteinLocal; p++) {
+            // for gidBind = ID_UB, ZDD fills findData with invalid data.
+            rodLengthDataDirectory.gidToFind[2 * p + 0] = proteinContainer[p].bind.gidBind[0];
+            rodLengthDataDirectory.gidToFind[2 * p + 1] = proteinContainer[p].bind.gidBind[1];
+        }
+        rodLengthDataDirectory.find();
+
+#pragma omp parallel for
+        for (int i = 0; i < nProteinLocal; i++) {
+            auto &p = proteinContainer[i];
+
+            for (int e = 0; e < 2; e++) {
+                const bool endBound = (p.bind.gidBind[e] != ID_UB);
+                if (endBound) {
+                    const double length = rodLengthDataDirectory.dataToFind[2 * i + e];
+                    const bool unbindOccurs =
+                        (p.bind.distBind[e] > 0.5 * length) || (p.bind.distBind[e] < -0.5 * length);
+                    if (unbindOccurs) {
+                        p.bind.setUnBind(e);
+                    }
+                }
+            }
+        }
+    }
+
+    ///////////////////////////////////////
+    // Finalize tubulin bind interaction //
+    ///////////////////////////////////////
+    {
+        // Loop over each microtubule and increment its length by the number of tubulin that bind to it.
+        // Shift its position accordingly.
+        const int nRodLocal = rodSystem.getContainer().getNumberOfParticleLocal();
+        for (int i = 0; i < nRodLocal; i++) {
+            auto &sy = rodSystem.getContainerNonConst()[i];
+
+            // Increment the length of the microtubule by the number of tubulin that bind to it.
+            const int bindCount = globalTubulinPoolPtr->get_bind_count(sy.globalIndex);
+            const double changeInLength = bindCount * proteinConfig.tubulinLength;
+            sy.length += changeInLength;
+
+            // Shift the position to account for the change in length.
+            const Evec3 direction = ECmapq(sy.orientation) * Evec3(0, 0, 1);
+            Emap3(sy.pos) += direction * changeInLength / 2.0;
+        }
+    }
+}
+
+void TubuleSystem::calcTubulinBindInteractionExplicit() {
+    // TUBULIN MUST BE LENGTH ZERO (aka, spheres)
+    // MICROTUBULES MUST BE IN GROUP 0 AND TUBULIN IN GROUP 1
+    // PROTEINS SHOULD HAVE TAG 0
+
+#ifndef NDEBUG
+    // Test our assumptions:
+
+    {
+        // We assume that tubulin are length zero (aka, spheres).
+        // We assume that the tubulinBindingCutoffRadius is larger than the radius of a tubulin.
+        const int nRodLocal = rodSystem.getContainer().getNumberOfParticleLocal();
+        for (int i = 0; i < nRodLocal; i++) {
+            const auto &sy = rodSystem.getContainer()[i];
+            const bool isTubulin = (sy.group == 1);
+            if (isTubulin) {
+                assert(sy.length < 1e-12 && "Tubulin must be length zero (aka, spheres).");
+                assert(sy.radius < proteinConfig.tubulinBindingCutoffRadius &&
+                       "The tubulin binding cutoff radius must be larger than the radius of a tubulin.");
+            }
+        }
+    }
+#endif
+
+    ////////////////////////////////
+    // Tubulin unbind interaction //
+    ////////////////////////////////
+
+    // What are out control parameters?
+    //  - tubulinBindInteractionType: The type of tubulin binding interaction to use. Options are 'explicit' and 'implicit'. 
+    //  - defaultTubulinUnbindingRate: The default unbinding rate for tubulin.
+    //  - proteinEnhancedTubulinUnbindingRate: The unbinding rate for tubulin when a protein is present at the end of the microtubule.
+    //  - proteinEnhancementCutoffDistance: The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
+    //  - tubulinBindingRate: The rate at which tubulin binds to the end of a microtubule.
+    //  - tubulinBindingCutoffRadius: The radius around the end of the microtubule at which tubulin can bind. This should be larger than the radius of a tubulin.
+    //  - dt: The time step size.
+
+    std::vector<Sylinder> newSylinders;
+    {
+        // A tubulin unbinds based on a Poisson process with a rate that depends on
+        // the presence of a protein at the end of the microtubule.
+
+        // Step 1: Calculate the unbinding rate for each microtubule based on the presence of a protein at the end.
+
+        // Loop over each protein, determine if it's close enough to the end of a microtubule to enhance the unbinding rate of tubulin or not. Store the rate per microtubule
+        // and the sequential global index of said microtubule. Perform an all-to-all communication to send the rates and global indices to everyone. Then, sort the rates by global index.
+        // After all of that, we can loop over the microtubules and fetch the rate using the global index.
+        std::vector<int> globalIndicesToCommunicate;
+        std::vector<int> hasEnhancedUnbindingFlagToCommunicate;
+        std::vector<std::vector<int>> globalIndicesToCommunicatePool(omp_get_max_threads());
+        std::vector<std::vector<int>> hasEnhancedUnbindingFlagToCommunicatePool(omp_get_max_threads());
+        const int nProteinLocal = proteinContainer.getNumberOfParticleLocal();
+#pragma omp parallel
+        {
+            const int threadId = omp_get_thread_num();
+            globalIndicesToCommunicatePool[threadId].clear();
+            hasEnhancedUnbindingFlagToCommunicatePool[threadId].clear();
+#pragma omp for
+            for (int i = 0; i < nProteinLocal; i++) {
+                const auto &p = proteinContainer[i];
+                if ((p.property.tag == 0) && (p.bind.gidBind[0] != ID_UB) &&
+                    (0.5 * p.bind.lenBind[0] - p.bind.distBind[0] < proteinConfig.proteinEnhancementCutoffDistance)) {
+                    // For these proteins, only the first head binds. The second shouldn't exist and is only present for consistency with the other protein types.
+                    // Note, distBind ranges from [-0.5 length, 0.5 length] where length is the length of the microtubule.
+
+                    // The protein is the correct type, and it's close enough to the end of the microtubule to cause increased unbinding of tubulin.
+                    assert(p.bind.indexBind[0] != GEO_INVALID_INDEX &&
+                           "The global index of the bound microtubule is invalid. Tell the developers.");
+                    globalIndicesToCommunicatePool[threadId].push_back(p.bind.indexBind[0]);
+                    hasEnhancedUnbindingFlagToCommunicatePool[threadId].push_back(
+                        1); // MPI doesn't like bools. We'll use 0 and 1 instead.
+                }
+            }
+        }
+
+        // Merge the thread-local pools.
+        for (int i = 0; i < omp_get_max_threads(); i++) {
+            globalIndicesToCommunicate.insert(globalIndicesToCommunicate.end(),
+                                              globalIndicesToCommunicatePool[i].begin(),
+                                              globalIndicesToCommunicatePool[i].end());
+            hasEnhancedUnbindingFlagToCommunicate.insert(hasEnhancedUnbindingFlagToCommunicate.end(),
+                                                         hasEnhancedUnbindingFlagToCommunicatePool[i].begin(),
+                                                         hasEnhancedUnbindingFlagToCommunicatePool[i].end());
+        }
+
+        // Perform a global all gather to collect the global indices and flags.
+
+        // Each process needs to know how many indices it will send and receive from every other process.
+        int nProcs = rodSystem.getCommRcp()->getSize();
+        int localSize = globalIndicesToCommunicate.size(); // Size of local data to send
+        std::vector<int> allSizes(nProcs);                 // Vector to hold the sizes of data from all processes
+        MPI_Allgather(&localSize, 1, MPI_INT, allSizes.data(), 1, MPI_INT, MPI_COMM_WORLD);
+
+        // Each process calculates the displacements where each segment of received data should be placed in the receive buffer.
+        std::vector<int> displs(nProcs);
+        int totalSize = 0;
+        for (int i = 0; i < nProcs; ++i) {
+            displs[i] = totalSize;
+            totalSize += allSizes[i];
+        }
+
+        // Gather the data
+        std::vector<int> allGlobalIndices(totalSize);
+        std::vector<int> allHasEnhancedUnbindingFlags(totalSize);
+        MPI_Allgatherv(globalIndicesToCommunicate.data(), localSize, MPI_INT, allGlobalIndices.data(), allSizes.data(),
+                       displs.data(), MPI_INT, MPI_COMM_WORLD);
+        MPI_Allgatherv(hasEnhancedUnbindingFlagToCommunicate.data(), localSize, MPI_INT,
+                       allHasEnhancedUnbindingFlags.data(), allSizes.data(), displs.data(), MPI_INT, MPI_COMM_WORLD);
+
+        // Now, we need to sort and unique the global indices and flag. If two global indices are the same, we take the max of the has enhanced unbinding flags.
+        // To perform this sorting, we will create a single vector with size number of global particles and initialized to false. The global index can be used to
         // index this vector. We will index into this vector and store the max of the unsorted flags. As a result, if there are multiple entries
         // for the same rod, the rod should be marked with true if at least one instance of its flag is true.
         int globalNumberOfRods = 0;
@@ -403,7 +655,8 @@ void TubuleSystem::calcTubulinBindInteraction() {
                 if (isMicrotubule) {
                     // Check if the microtubule should unbind a tubulin based on a Poisson process with the calculated rate.
                     const double randU01 = rngPoolPtr->getU01(threadId);
-                    const bool tooShort = sy.length < 4 * sy.radius;  // NOTE, we set the minimum microtubule size to be 2 tubulin
+                    const bool tooShort =
+                        sy.length < 4 * sy.radius; // NOTE, we set the minimum microtubule size to be 2 tubulin
 
                     assert(sy.globalIndex != GEO_INVALID_INDEX &&
                            "The global index of a microtubule is invalid. Tell the developers.");
@@ -427,12 +680,12 @@ void TubuleSystem::calcTubulinBindInteraction() {
                                                           rngPoolPtr->getU01(threadId), rngPoolPtr->getU01(threadId));
                         Evec3 randomUnitDir = unitRandomOrient * Evec3(0, 0, 1);
                         const Evec3 direction = ECmapq(sy.orientation) * Evec3(0, 0, 1);
-                        const double randomRadius = sy.radius + rngPoolPtr->getU01(threadId) * (proteinConfig.tubulinBindingCutoffRadius - sy.radius);
+                        const double randomRadius =
+                            sy.radius +
+                            rngPoolPtr->getU01(threadId) * (proteinConfig.tubulinBindingCutoffRadius - sy.radius);
                         Emap3(newSy.pos) =
                             Emap3(sy.pos) + 0.5 * sy.length * direction +
                             rngPoolPtr->getU01(threadId) * proteinConfig.tubulinBindingCutoffRadius * randomUnitDir;
-
-
 
                         // Add the new sylinder to the thread-local pool.
                         newSylindersPool[threadId].push_back(newSy);
@@ -440,8 +693,8 @@ void TubuleSystem::calcTubulinBindInteraction() {
                         // Reduce the length of the microtubule by the 2 radius of a tubulin.
                         sy.length -= 2 * sy.radius;
 
-                        // Shift the length by the length of a tubulin plus twice the radius in the direction of the microtubule's orientation.
-                        Emap3(sy.pos) -= direction * 2 * sy.radius;
+                        // Shift the length by the half the tubulin size in the direction of the microtubule's orientation.
+                        Emap3(sy.pos) -= direction * sy.radius;
                     }
                 }
             }
@@ -656,11 +909,11 @@ void TubuleSystem::calcTubulinBindInteraction() {
                     // Grow length by the child's total length (tubulin are sphere's, so length is zero but total length is 2 * radius)
                     // Grow by as many children as we consume.
                     const double growLength = sy.radius * 2 * globalParentBindCounts[sy.globalIndex];
-                    sy.length += sy.radius * 2 * globalParentBindCounts[sy.globalIndex];
+                    sy.length += growLength;
 
                     // Shift position by the child's total length (along our axis) toward the side that the child fused to.
                     const Evec3 direction = ECmapq(sy.orientation) * Evec3(0, 0, 1);
-                    Emap3(sy.pos) += direction * growLength;
+                    Emap3(sy.pos) += direction * growLength / 2.0;
                 } else {
                     // Mark the tubulin for deletion.
                     localMarkedForDeletion[i] = globalChildMarkedForDeletionFlags[sy.globalIndex];

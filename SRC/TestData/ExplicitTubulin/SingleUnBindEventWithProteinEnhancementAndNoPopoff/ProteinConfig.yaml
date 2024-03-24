@@ -1,4 +1,5 @@
 KBT: 0.00411 # pN.um, at 300K
+tubulinBindInteractionType: "explicit" # The type of tubulin binding interaction to use. Options are 'explicit' and 'implicit'.
 defaultTubulinUnbindingRate: 0          # The default unbinding rate for tubulin.
 proteinEnhancedTubulinUnbindingRate: 1000.0  # The unbinding rate for tubulin when a protein is present at the end of the microtubule.
 proteinEnhancementCutoffDistance: 0.5 # The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.

@@ -42,8 +42,8 @@ find_package(VTK REQUIRED COMPONENTS IOXML HINTS ${SFTPATH}/lib/cmake
                                      $ENV{VTK_BASE} $ENV{VTK_ROOT})
 
 # Get Trilinos as one entity
-find_package(Trilinos REQUIRED HINTS ${SFTPATH}/lib/cmake $ENV{TRILINOS_BASE}
-             $ENV{TRILINOS_ROOT})
+find_package(Trilinos REQUIRED COMPONENTS Teuchos Tpetra Belos Zoltan Zoltan2
+             HINTS ${SFTPATH}/lib/cmake $ENV{TRILINOS_BASE} $ENV{TRILINOS_ROOT})
 
 # clean up the too-long list
 list(REMOVE_DUPLICATES Trilinos_INCLUDE_DIRS)

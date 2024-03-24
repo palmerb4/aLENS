@@ -16,6 +16,7 @@
 #include "Protein/ProteinData.hpp"
 
 #include "TubuleBind.hpp"
+#include "GlobalTubulinPool.hpp"
 
 // Sylinder as Tubule
 #include "Constraint/ConstraintSolver.hpp"
@@ -96,6 +97,9 @@ class TubuleSystem {
     std::shared_ptr<TRngPool> rngPoolPtr; ///< point to rodSystem.rngPoolPtr
     std::vector<LookupTable> LUTArr;      ///< protein LookupTable Holder
 
+    // Tubulin
+    std::shared_ptr<GlobalTubulinPool> globalTubulinPoolPtr; ///< global tubulin pool for binding and unbinding tubulin
+
     SylinderSystem rodSystem; ///< each tubule modeled as a sylinder
 
     // same DomainInfo for protein and tubule
@@ -132,6 +136,18 @@ class TubuleSystem {
      *
      */
     void calcTubulinBindInteraction();
+
+      /**
+     * @brief Bind tubulin to existing microtubules using implicit tubulin
+     *
+     */
+    void calcTubulinBindInteractionImplicit();
+
+      /**
+     * @brief Bind tubulin to existing microtubules using explicit tubulin
+     *
+     */
+    void calcTubulinBindInteractionExplicit();
 
     /**
      * @brief calculate protein diffusion or walking

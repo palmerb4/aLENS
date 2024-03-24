@@ -31,13 +31,20 @@
 class ProteinConfig {
   public:
     double KBT;
+    std::string tubulinBindInteractionType; ///< The type of tubulin binding interaction to use. Options are 'explicit' and 'implicit'. 
     double defaultTubulinUnbindingRate;          ///< The default unbinding rate for tubulin.
     double proteinEnhancedTubulinUnbindingRate;  ///< The unbinding rate for tubulin when a protein is present at the end of the microtubule.
     double proteinEnhancementCutoffDistance;     ///< The distance from the end of the microtubule at which a protein enhances the unbinding rate of tubulin.
     double tubulinBindingRate;         ///< The rate at which tubulin binds to the end of a microtubule.
-    double tubulinBindingCutoffRadius; ///< The radius around the end of the microtubule at which tubulin can bind.
 
+    // Only used by explicit tubulin model
+    double tubulinBindingCutoffRadius = 0; ///< The radius around the end of the microtubule at which tubulin can bind.
 
+    // Only used by implicit tubulin model
+    double tubulinLength = 0; ///< The length of a tubulin.
+    int tubulinLoadBalanceFrequency = 1; ///< The frequency (in number of timesteps between load balance calls) at which the 
+                                     /// local number of tubulin is load balanced synchronized with the global count and redistributed.
+    int initialFreeTubulinCount = 0; ///< The initial number of free tubulin in the global pool.
 
     std::vector<ProteinType> types; ///< settings for different types
 

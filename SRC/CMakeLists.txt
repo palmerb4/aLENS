@@ -1,29 +1,5 @@
 # unit tests depend on GTest
-# include(FetchContent)
-# FetchContent_Declare(
-#   googletest
-#   GIT_REPOSITORY https://github.com/google/googletest.git
-#   GIT_TAG        release-1.12.1
-# )
-
-# # For Windows: Prevent overriding the parent project's compiler/linker settings
-# set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-# FetchContent_MakeAvailable(googletest)
-
-include(ExternalProject)
-ExternalProject_Add(googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        release-1.12.1
-  CMAKE_ARGS     -Dgtest_force_shared_crt=ON
-  PREFIX         ${CMAKE_BINARY_DIR}/external/googletest
-  INSTALL_COMMAND ""
-)
-
-# Assuming the structure matches what ExternalProject_Add creates
-set(GTEST_ROOT_DIR "${CMAKE_BINARY_DIR}/external/googletest")
-set(GTEST_INCLUDE_DIR "${GTEST_ROOT_DIR}/src/googletest/include")
-# This path might need adjustment based on the actual output of the build
-set(GTEST_LIB_DIR "${GTEST_ROOT_DIR}/src/googletest-build/lib")
+find_package(GTest REQUIRED CONFIG PATHS ${SFTPATH} ${SFTPATH}/lib/cmake/GTest NO_DEFAULT_PATH)
 
 add_executable(test_TubuleSystemCalcBindInteraction 
   TubuleSystemCalcBindInteraction_test.cpp
@@ -49,7 +25,6 @@ target_include_directories(test_TubuleSystemCalcBindInteraction PRIVATE
   ${Trilinos_INCLUDE_DIRS}
   ${TRNG_INCLUDE_DIR}
   ${YAML_CPP_INCLUDE_DIR}
-  ${GTEST_INCLUDE_DIR}
 )
 
 target_link_libraries(test_TubuleSystemCalcBindInteraction PRIVATE
@@ -62,10 +37,7 @@ ${TRNG_LIBRARY}
   Boost::boost
   OpenMP::OpenMP_CXX
   MPI::MPI_CXX
-  ${GTEST_LIB_DIR}/libgtest.a
-  ${GTEST_LIB_DIR}/libgtest_main.a
-  ${GTEST_LIB_DIR}/libgmock.a
-  ${GTEST_LIB_DIR}/libgmock_main.a
+  GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main  
 )
 
 add_test(NAME test_TubuleSystemCalcBindInteraction COMMAND test_TubuleSystemCalcBindInteraction)
