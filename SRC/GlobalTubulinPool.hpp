@@ -37,9 +37,10 @@ class GlobalTubulinPool {
                       const int &num_procs, const int rank, TRngPool *const rng_pool_ptr)
         : global_microtubule_count_(initial_global_microtubule_count),
           global_tubulin_count_(initial_global_tubulin_count), local_tubulin_count_(0), num_procs_(num_procs),
-          rank_(rank), rng_pool_ptr_(rng_pool_ptr), in_sync_(true) {
+          rank_(rank), rng_pool_ptr_(rng_pool_ptr) {
         assert(rng_pool_ptr_ != nullptr);
         bind_count_per_microtubule_.resize(global_microtubule_count_);
+        std::fill(bind_count_per_microtubule_.begin(), bind_count_per_microtubule_.end(), 0);
         distribute();
     }
 
@@ -57,7 +58,6 @@ class GlobalTubulinPool {
         int global_tubulin_count_sum = 0;
         MPI_Allreduce(&local_tubulin_count_, &global_tubulin_count_sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
         global_tubulin_count_ = global_tubulin_count_sum;
-        in_sync_ = true;
     }
 
     void count_tubulin_binding(const double &binding_rate, const double &dt) {
@@ -89,9 +89,6 @@ class GlobalTubulinPool {
         // Perform an all-to-all sum of the bind counts.
         MPI_Allreduce(local_bind_count_per_microtubule.data(), bind_count_per_microtubule_.data(),
                       global_microtubule_count_, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
-        // Because the total number of tubulin may have changed, we mark ourselves as out of sync.
-        in_sync_ = false;
     }
 
     int get_bind_count(const int &global_microtubule_index) const {
@@ -99,20 +96,31 @@ class GlobalTubulinPool {
     }
 
     int get_global_tubulin_count() {
-        if (!in_sync_) {
-            synchronize();
-        }
+        synchronize();
         return global_tubulin_count_;
+    }
+
+    int get_global_microtubule_count() {
+        return global_microtubule_count_;
+    }
+
+    int get_local_tubulin_count() {
+        return local_tubulin_count_;
     }
 
     void set_global_microtubule_count(const int &global_microtubule_count) {
         global_microtubule_count_ = global_microtubule_count;
         bind_count_per_microtubule_.resize(global_microtubule_count_);
+        std::fill(bind_count_per_microtubule_.begin(), bind_count_per_microtubule_.end(), 0);
+    }
+
+    void set_global_tubulin_count(const int &global_tubulin_count) {
+        global_tubulin_count_ = global_tubulin_count;
+        distribute();
     }
 
     void increment() {
         local_tubulin_count_++;
-        in_sync_ = false;
     }
 
   private:
@@ -123,7 +131,6 @@ class GlobalTubulinPool {
     int rank_;
     TRngPool *const rng_pool_ptr_;
     std::vector<int> bind_count_per_microtubule_;
-    bool in_sync_;
 }; // GlobalTubulinPool
 
 #endif

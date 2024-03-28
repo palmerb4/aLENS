@@ -1,6 +1,7 @@
 /* This test is designed to check the correctness of TubuleSystem::calcTubulinBindInteraction()*/
 
 #include "TubuleSystem.hpp"
+#include "GlobalTubulinPool.hpp"
 #include <gtest/gtest.h>
 #include <mpi.h>
 
@@ -29,13 +30,60 @@ int main(int argc, char **argv) {
 
 namespace {
 
-//! \name Implicit Tubulin
+//! \name Test test
 //@{
 
 TEST(AnEmptyTest, EmptyTest) {
     // This test is empty and is used to ensure that the test suite is running correctly.
     EXPECT_EQ(1, 1);
 }
+//@}
+
+//! \name GlobalTubulinPool tests
+//@{
+
+TEST(GlobalTubulinPool, GlobalLocalInteractions) {
+    int num_procs;
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+    const int global_microtubule_count = 2 * num_procs;
+    const int global_tubulin_count = 5 * num_procs;
+    TRngPool rng_pool(0);
+
+    GlobalTubulinPool myPool(global_microtubule_count, global_tubulin_count, num_procs, rank, &rng_pool);
+    EXPECT_EQ(myPool.get_global_tubulin_count(), global_tubulin_count);
+    EXPECT_EQ(myPool.get_local_tubulin_count(), 5);
+    myPool.set_global_tubulin_count(6 * num_procs);
+    EXPECT_EQ(myPool.get_global_tubulin_count(), 6 * num_procs);
+    EXPECT_EQ(myPool.get_local_tubulin_count(), 6);
+    myPool.set_global_microtubule_count(3 * num_procs);
+    EXPECT_EQ(myPool.get_global_microtubule_count(), 3 * num_procs);
+
+    myPool.increment();
+    EXPECT_EQ(myPool.get_local_tubulin_count(), 7);
+    EXPECT_EQ(myPool.get_global_tubulin_count(), 7 * num_procs) 
+        << "Incrementing locally does not impact the global count until you synchronize, BUT getting the global count will synchronize";
+
+    if (rank == 0) {
+        for (int i = 0; i < 2 * num_procs; i++) {
+            myPool.increment();
+        }
+        EXPECT_EQ(myPool.get_local_tubulin_count(), 7 + 2 * num_procs);
+    } else {
+        EXPECT_EQ(myPool.get_local_tubulin_count(), 7);
+    }
+    EXPECT_EQ(myPool.get_global_tubulin_count(), 7 * num_procs + 2 * num_procs);
+
+    myPool.distribute();
+    EXPECT_EQ(myPool.get_local_tubulin_count(), 9);
+    EXPECT_EQ(myPool.get_global_tubulin_count(), 9 * num_procs); 
+}
+//@}
+
+//! \name Implicit Tubulin
+//@{
 
 TEST(TubuleSystemCalcTubulinBindInteractionImplicit, SingleUnbindEvent) {
     // 1 microtubule with no proteins and a large enough default tubulin unbind rate to force a tubulin to unbind.
