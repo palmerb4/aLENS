@@ -64,7 +64,7 @@ class GlobalTubulinPool {
         // Loop over each locally owned tubulin and draw a U01 random number. If it's less than the binding probability, bind to a microtubule.
         // We need to draw a random number between 0 and N-1 to decide which microtubule to bind to.
         // We then increment the bind count for that microtubule.
-        const double binding_probability = 1 - std::exp(-global_microtubule_count_ * binding_rate * dt);
+        const double binding_probability = 1 - std::exp(-binding_rate * dt);  // TODO: Should binding_rate be binding rate per number of microtubules requiring that the exponent be multiplied by the number of microtubules?
         std::fill(bind_count_per_microtubule_.begin(), bind_count_per_microtubule_.end(), 0);
         std::vector local_bind_count_per_microtubule(global_microtubule_count_, 0);
         const int initial_local_tubulin_count = local_tubulin_count_;

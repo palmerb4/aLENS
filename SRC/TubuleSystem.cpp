@@ -300,6 +300,9 @@ void TubuleSystem::calcTubulinBindInteractionImplicit() {
     if (rodSystem.getStepCount() % proteinConfig.tubulinLoadBalanceFrequency == 0) {
         globalTubulinPoolPtr->synchronize();
         globalTubulinPoolPtr->distribute();
+        if (rank == 0) {
+            spdlog::info("Global tubulin count: {}", globalTubulinPoolPtr->get_global_tubulin_count());
+        }
     }
 
     ////////////////////////////////////
@@ -426,8 +429,8 @@ void TubuleSystem::calcTubulinBindInteractionImplicit() {
                 const double tubulinUnbindingRate = enhancedUnbindingFlag
                                                         ? proteinConfig.proteinEnhancedTubulinUnbindingRate
                                                         : proteinConfig.defaultTubulinUnbindingRate;
-
-                if ((randU01 < tubulinUnbindingRate * rodSystem.runConfig.dt) && sufficientlyLong) {
+                const double unbindingProbability = 1 - std::exp(-tubulinUnbindingRate * rodSystem.runConfig.dt);
+                if ((randU01 < unbindingProbability) && sufficientlyLong) {
                     // Unbind a tubulin from the microtubule and add the tubulin to the global unbound pool. Note, this must be done in a thread-safe manner.
 #pragma omp critical
                     globalTubulinPoolPtr->increment();
